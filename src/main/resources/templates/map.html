@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="UTF-8">
+    <title>Mapa przypadków koronawirusa w Polsce</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.6.0/dist/leaflet.css"
+          integrity="sha512-xwE/Az9zrjBIphAcBb3F6JVqxf46+CDLwfLMHloNu6KEQCAWi6HcDUbeOfBIptF7tcCzusKFjFw2yuvEpDL9wQ=="
+          crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.6.0/dist/leaflet.js"
+            integrity="sha512-gZwIG9x3wUXg2hdXF6+rVkLF/0Vi9U8D2Ntg4Ga5I5BZpVkVxlJWbSQtXPSiUTtC0TjtGOmxa1AJPuV0CPthew=="
+            crossorigin=""></script>
+    <script src='https://api.mapbox.com/mapbox-gl-js/v1.12.0/mapbox-gl.js'></script>
+    <link href='https://api.mapbox.com/mapbox-gl-js/v1.12.0/mapbox-gl.css' rel='stylesheet' />
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js" type="text/javascript"></script>
+    <script type="text/javascript" th:src="@{/static/js/config.js}"></script>
+    <link rel="stylesheet" th:href="@{/static/css/style.css}">
+</head>
+<body>
+<div id="map"></div>
+
+<script type="text/javascript" th:inline="javascript">
+    var colors = /*[[${colors}]]*/ '';
+    var infected = /*[[${infected}]]*/ '';
+    var breakpointsList = /*[[${breakpointsList}]]*/ '';
+    var generalInfo = /*[[${generalInfo}]]*/ '';
+    var date = /*[[${date}]]*/ '';
+    var voivodeship = /*[[${voivodeship}]]*/ '';
+
+    var myKey = config.MY_KEY;
+    var divVoivodeInfo;
+    var infoRegion, infoPopulation, infoDensity, infoPercentage, infoArea;
+
+    var allCases = generalInfo[0];
+    var allInfected = generalInfo[1];
+    var allDeceased = generalInfo[2];
+
+    var colorsTable = ['#FFEDA0', '#FED976','#FEB24C', '#FD8D3C', '#FC4E2A', '#E31A1C', '#BD0026', '#800026'];
+    var geojson;
+
+    var mapboxTiles = L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}?access_token='+myKey+'', {
+    attribution: '© <a href="https://www.mapbox.com/feedback/">Mapbox</a> © <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    tileSize: 512,
+    zoomOffset: -1
+    });
+
+    var map = L.map('map')
+    .addLayer(mapboxTiles)
+    .setView([51.91, 19.14], 6);
+    map.zoomControl.remove();
+
+    $.getJSON("../static/geojson/voivodeships.geojson",function(data){
+    geojson = L.geoJson(data, {
+        style: style,
+        onEachFeature: onEachFeature
+    }).addTo(map);
+    });
+
+
+    function getColor(d) {
+    var i = 0;
+    for(i;i<colors.length;i++){
+        if(colors[i].region==d) return colors[i].color;
+        }
+    }
+
+
+    function style(feature) {
+        return {
+            fillColor: getColor(feature.properties.nazwa),
+            weight: 2,
+            opacity: 1,
+            color: '#222',
+            dashArray: '',
+            fillOpacity: 0.7
+        };
+    }
+
+    function resetHighlight(e) {
+        geojson.resetStyle(e.target);
+        info.update();
+    }
+
+    function highlightFeature(e) {
+        var layer = e.target;
+        info.update(layer.feature.properties);
+    layer.setStyle({
+        weight: 3,
+        color: '#EEEEEE',
+        dashArray: '',
+        fillOpacity: 0.7
+    });
+
+    if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
+        layer.bringToFront();
+        }
+    }
+
+    function onEachFeature(feature, layer) {
+    layer.on({
+            mouseover: highlightFeature,
+            mouseout: resetHighlight,
+            click: zoomToFeature
+        });
+    }
+
+
+
+    var voivodeInfo = L.control({position: 'bottomleft'});
+    voivodeInfo.onAdd = function (map){
+    divVoivodeInfo = L.DomUtil.create('div', 'voivode info');
+    divVoivodeInfo.style.visibility='hidden';
+    return divVoivodeInfo;
+    };
+    voivodeInfo.addTo(map);
+
+    function zoomToFeature(e) {
+        var layer = e.target;
+        map.fitBounds(layer.getBounds());
+        search(layer.feature.properties);
+        divVoivodeInfo.style.visibility='visible';
+        divVoivodeInfo.innerHTML='<b>Województwo ' + infoRegion + '</b><br>' +
+                    '<b>Zamieszkałych na terenie województwa </b> ' + numberWithCommas(infoPopulation) + ' <br>' +
+                    '<b>Powierzchnia </b> ' + numberWithCommas(infoArea) + ' km/2<br>' +
+                    '<b>Gęstość zaludnienia </b> ' + numberWithCommas(infoDensity) + ' osób na km/2<br>' +
+                    '<b>Procent osób zarażonych w województwie </b> ' + infoPercentage + '%';
+
+
+    }
+
+    function search(properties){
+        var i = 0;
+        for(i;i<voivodeship.length;i++){
+            if(properties.nazwa == voivodeship[i].region){
+                infoRegion = voivodeship[i].region;
+                infoPopulation = voivodeship[i].population;
+                infoDensity = voivodeship[i].density;
+                infoPercentage = voivodeship[i].percentageOfPeopleInfected;
+                infoArea = voivodeship[i].area;
+            }
+        }
+    }
+
+
+
+
+    var info = L.control();
+    info.onAdd = function (map) {
+        this._div = L.DomUtil.create('div', 'info'); // create a div with a class "info"
+        this.update();
+        return this._div;
+    };
+
+    info.update = function (props) {
+    this._div.innerHTML = (props ?
+        '<b>' + 'Województwo ' + props.nazwa + '</b><br>'
+        + voivodeshipInfo(props.nazwa)
+        : 'Najedź na województwo');
+
+    };
+
+
+
+
+    function voivodeshipInfo(voivodeship){
+        var deceasedCount;
+        var infectedCount;
+        var i=0;
+        for(i;i<infected.length;i++){
+        if(voivodeship==infected[i].region){
+            deceasedCount = infected[i].deceasedCount;
+            infectedCount = infected[i].infectedCount;
+            }
+        }
+        return ('Zainfekowanych: ' + numberWithCommas(infectedCount) + '<br>' +
+                'Zmarłych: ' + numberWithCommas(deceasedCount));
+    }
+    info.addTo(map);
+
+
+
+    var legend = L.control({position: 'bottomright'});
+    legend.onAdd = function (map) {
+        var div = L.DomUtil.create('div', 'info legend'),
+        grades = breakpointsList,
+        labels = [];
+
+        for (var i = 0; i < grades.length; i++) {
+            div.innerHTML +=
+                '<i style="background:' + colorsTable[i] + '"></i> ' +
+                grades[i] + (grades[i + 1] ? '&ndash;' + grades[i + 1] + '<br>' : '+');
+        }
+    return div;
+    };
+    legend.addTo(map);
+
+
+
+
+    var generalInfo = L.control({position: 'topleft'});
+    generalInfo.onAdd = function (map){
+    var div = L.DomUtil.create('div', 'general info');
+    div.innerHTML = '<b>Przypadków od początku epidemii</b> ' +
+                    numberWithCommas(allCases) + '<br>' +
+                    '<b>Aktywnych</b> ' +
+                    numberWithCommas(allInfected) + '<br>' +
+                    '<b>Zmarłych</b> ' +
+                    numberWithCommas(allDeceased) + '<br>' +
+                    '<b>Stan na</b> ' +
+                    date;
+    return div;
+    };
+    generalInfo.addTo(map);
+
+
+
+
+    function numberWithCommas(x) {
+        return x.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",");
+    }
+    </script>
+</body>
+</html>
