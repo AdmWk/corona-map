@@ -29,6 +29,7 @@ public class CasesRepo {
     List<Integer> generalInfo;
     List<Voivodeship> voivodeship;
 
+    int[] percentageDividers = {90,50, 20, 15, 10, 8, 6};
     public CasesRepo() throws IOException {
         URL url = new URL("https://api.apify.com/v2/key-value-stores/3Po6TV7wTht4vIEid/records/LATEST?disableRedirect=true");
         InputStreamReader reader = new InputStreamReader(url.openStream());
@@ -91,13 +92,9 @@ public class CasesRepo {
         //Used to match with colors in a map legend
 
         breakpoints.add(0);
-        breakpoints.add(cases/90);
-        breakpoints.add(cases/50);
-        breakpoints.add(cases/20);
-        breakpoints.add(cases/15);
-        breakpoints.add(cases/10);
-        breakpoints.add(cases/8);
-        breakpoints.add(cases/6);
+        for(int i= 0; i<percentageDividers.length;i++){
+            breakpoints.add(cases/percentageDividers[i]);
+        }
         return breakpoints;
     }
     private List<MapColors> matchColorToRegion(List<InfectedByRegion> infected, int allCases){
